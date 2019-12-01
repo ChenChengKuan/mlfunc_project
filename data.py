@@ -7,14 +7,25 @@ from torch.utils.data.dataset import Dataset
 
 
 class SingleCellData(Dataset):
-    def __init__(self, data_path, num_gene, normalized=True):
+    def __init__(self, data_path, num_gene, shared_gene_mask=None, filter_mask=None, normalized=True):
         self.data_path = data_path
         self.num_gene = num_gene
+        self.gene_mask = shared_gene_mask
+        self.filter_mask = filter_mask
         self.normalized = normalized
         self.anndata = anndata.read_h5ad(data_path)
-        sc.pp.filter_genes(self.anndata, min_counts=1)
-        self.gene_mask = self.select_gene(data=self.anndata.X, num_gene=self.num_gene)
+        self.num_class = len(self.anndata.obs['labels'].unique().tolist())
         
+        if self.filter_mask is None:
+            self.filter_mask, _ = sc.pp.filter_genes(self.anndata, min_counts=1, inplace=False)
+        else:
+            print("use share filter")
+        self.anndata = self.anndata[:, self.filter_mask]
+
+        if self.gene_mask is None:
+            self.gene_mask = self.select_gene(data=self.anndata.X, num_gene=self.num_gene)
+        else:
+            print("use share gene")
         if self.normalized:
             anndata_norm = self.anndata.copy()
             sc.pp.normalize_per_cell(anndata_norm, counts_per_cell_after=1_000_000)
@@ -22,10 +33,14 @@ class SingleCellData(Dataset):
             anndata_norm.X = anndata_norm.X.toarray()
             anndata_norm.X -= anndata_norm.X.mean(axis=0)
             anndata_norm.X /= anndata_norm.X.std(axis=0)
+            if np.isnan(anndata_norm.X).any():
+                print("Detect nan, fix by nan to num")
+                anndata_norm.X = np.nan_to_num(anndata_norm.X)
+                assert(not np.isnan(anndata_norm.X).any())
+
             self.anndata_preprocessed = anndata_norm[:, self.gene_mask].copy()
         else:
-            self.anndata_preprocessed = self.anndata.copy()
-            
+            self.anndata_preprocessed = self.anndata[:, self.gene_mask].copy()      
         self.X = torch.tensor(self.anndata_preprocessed.X)
         self.id_to_batch, self.batch_to_id = self.get_batch_map()
         self.id_to_cell, self.cell_to_id = self.get_cell_map()
