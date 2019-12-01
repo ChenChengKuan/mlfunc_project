@@ -4,26 +4,39 @@ import torch
 import torch.nn as nn
 import numpy as np
 import copy
-import sys
 import json
 
-class Saver():
-    def __init__(self, save_path, model_name, dataloaders, model, device):
+class saver():
+    def __init__(self, save_path, model_name, args):
         self.save_path = save_path
         self.model_name = model_name
-        self.config = config
-        self.model
+        self.args = args
     
-    def save_ckpt(self, model, optmizer):
-        pass
-    def save_log(self, log, best_log, config):
-        pass
+    def save_ckpt(self, model, model_metric, optimizer, epoch):
+        output_path = os.path.join(self.save_path, self.model_name)
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
+        
+        save_dict = {'model': model.state_dict(),
+                     'model_metric': model_metric.state_dict() if model_metric else None,\
+                     'optimizer': optimizer.state_dict()}
+        torch.save(save_dict, os.path.join(output_path, "ckpt_{}.pt".format(epoch)))
+        print("Save ckpt of model and optmizer")
+        
+    def save_log(self, log, best_log):
+        output = {'args': self.args.__dict__, \
+                  'log': log,\
+                  'best':best_log}
+        output_path = os.path.join(self.save_path, self.model_name, 'log.txt')
+        with open(output_path, 'w') as handle:
+            json.dump(output, handle)
+        print("Saved training log and experiment config")
     def save_embedding(self, model, dataloaders, device):
         pass
 
-def train(dataloaders, model, metric, criterion, optim, device, saver, num_epoch):
+def train(dataloaders, model, model_metric, criterion, optimizer, device, saver, num_epoch):
     since = time.time()
-    log = []
+    logs = []
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
     best_epoch = 0
@@ -46,8 +59,8 @@ def train(dataloaders, model, metric, criterion, optim, device, saver, num_epoch
 
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    if metric is not None:
-                        metric_output = metric(outputs, labels)
+                    if model_metric is not None:
+                        metric_output = model_metric(outputs, labels)
                         _, preds = torch.max(metric_output, 1)
                         loss = criterion(metric_output, labels)
                     else:
@@ -66,18 +79,17 @@ def train(dataloaders, model, metric, criterion, optim, device, saver, num_epoch
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
-            save_log_path = os.path.join(save_path, "{}_log.txt".format(phase))
             logs.append({'epoch':epoch,\
                          '{}_loss'.format(phase):epoch_loss,\
-                         '{}_acc'.format(pahse): epoch_acc})
+                         '{}_acc'.format(phase): epoch_acc.item()})
             # deep copy the model
             if phase == 'test' and epoch_acc > best_acc:
                 best_epoch = epoch
                 best_acc = epoch_acc
                 best_log['best_epoch'] = epoch
-                best_log['best_acc'] = epoch_acc
+                best_log['best_acc'] = epoch_acc.item()
             if phase == 'train':
-                saver.save_ckpt(model, optimzer, epoch)
+                saver.save_ckpt(model, model_metric, optimizer, epoch)
         print()
 
     time_elapsed = time.time() - since
@@ -85,7 +97,7 @@ def train(dataloaders, model, metric, criterion, optim, device, saver, num_epoch
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Acc: {:4f}'.format(best_acc))
     saver.save_log(logs, best_log)
-    saver_save_embedding(model, dataloaders, device)
+    #saver_save_embedding(model, dataloaders, device)
     return
 
 

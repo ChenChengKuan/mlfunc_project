@@ -9,7 +9,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from data import SingleCellData
 from loss import ArcFaceLoss
-from utils import train, create_model
+from utils import train, create_model, saver
 
 
 
@@ -52,6 +52,8 @@ if __name__ == '__main__':
     sc_dataloader_train = DataLoader(sc_dataset_train, batch_size=args.batch_size)
     sc_dataloader_test = DataLoader(sc_dataset_test, batch_size=args.batch_size)
     dataloader_dict = {'train':sc_dataloader_train, 'test':sc_dataloader_test}
+
+    parameters = []
     model = create_model(num_input=args.num_gene_selected,\
                          num_hidden_units=args.layers,\
                          num_class=sc_dataset_train.num_class,\
@@ -59,18 +61,30 @@ if __name__ == '__main__':
                          use_metric=args.use_metric)
     model.to(device)
     print(model)
+    parameters.append({'params':model.parameters()})
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.sgd_momentum)
+    
     if args.use_metric:
-        metric = ArcFaceLoss(in_features=int(args.layers[-1]), out_features=sc_dataset_train.num_class)
-        metric.to(device)
+        model_metric = ArcFaceLoss(in_features=int(args.layers[-1]), out_features=sc_dataset_train.num_class)
+        model_metric.to(device)
+        parameters.append({'params':model_metric.parameters()})
+        model_name = 'MLP_{}_metric'.format("-".join(args.layers))
     else:
-        metric = None
+        model_metric = None
+        model_name = 'MLP_{}'.format("-".join(args.layers))
+    
+    optimizer = torch.optim.SGD(parameters, lr=args.learning_rate, momentum=args.sgd_momentum)
+
+    if not os.path.exists(args.save_path):
+        os.mkdir(args.save_path)
+    saver = saver(save_path=args.save_path,\
+                  model_name=model_name,\
+                  args=args)
     results = train(dataloaders=dataloader_dict,\
                     model=model,\
-                    metric=metric,\
+                    model_metric=model_metric,\
                     criterion=criterion,\
-                    optim=optimizer,\
+                    optimizer=optimizer,\
                     device=device,\
-                    save_path=args.save_path,\
+                    saver=saver,\
                     num_epoch=args.num_epoch)
