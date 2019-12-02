@@ -7,10 +7,11 @@ import copy
 import json
 
 class saver():
-    def __init__(self, save_path, model_name, args):
+    def __init__(self, save_path, model_name, writer, args):
         self.save_path = save_path
         self.model_name = model_name
         self.args = args
+        self.writer = writer
     
     def save_ckpt(self, model, model_metric, optimizer, epoch):
         output_path = os.path.join(self.save_path, self.model_name)
@@ -31,8 +32,33 @@ class saver():
         with open(output_path, 'w') as handle:
             json.dump(output, handle)
         print("Saved training log and experiment config")
-    def save_embedding(self, model, dataloaders, device):
-        pass
+    def save_embedding(self, model, embed_dim, dataloaders, device):
+        start_idx = 0
+        meta_list = []
+        embedding = torch.zeros(len(dataloaders['train'].dataset) + len(dataloaders['test'].dataset), embed_dim)
+        print(embedding.shape)
+        for phase in ['train', 'test']:
+            with torch.no_grad():
+                for inputs, labels, batch_id in dataloaders[phase]:
+                    inputs = inputs.to(device)
+                    labels = labels.to(device)
+
+                    outputs = model(inputs)
+                    # if model_metric is not None:
+                    #     embed = model_metric(outputs, labels)
+                    # else:
+                    #     embed = outputs
+                    
+                    end_idx = start_idx + inputs.shape[0]
+                    embedding[start_idx:end_idx] = outputs
+
+                    for i in range(len(labels)):
+                        meta_list.append("-".join([str(labels[i].item()),str(batch_id[i].item())]))
+                    start_idx = end_idx
+        assert len(meta_list) == embedding.shape[0]
+        torch.save(embedding, os.path.join(self.save_path, 'embed.pt'))
+        self.writer.add_embedding(embedding, metadata=meta_list)
+        self.writer.close()
 
 def train(dataloaders, model, model_metric, criterion, optimizer, device, saver, num_epoch):
     since = time.time()
@@ -97,7 +123,7 @@ def train(dataloaders, model, model_metric, criterion, optimizer, device, saver,
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Acc: {:4f}'.format(best_acc))
     saver.save_log(logs, best_log)
-    #saver_save_embedding(model, dataloaders, device)
+    saver.save_embedding(model, outputs.shape[-1], dataloaders, device)
     return
 
 
