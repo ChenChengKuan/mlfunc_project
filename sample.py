@@ -23,8 +23,8 @@ def sample(ref_file_name, output_path, sample_percentage):
     adata_unlabelled =  anndata.AnnData.concatenate(*adata_unsample_concat)
 
     ref_file_name_output = os.path.split(ref_file_name)[-1].split(".")[0]
-    save_path_labelled = os.path.join(output_path, "{}_labelled_{}.h5ad".format(ref_file_name_output, sample_percentage))
-    save_path_unlabelled = os.path.join(output_path, "{}_unlabelled_{}.h5ad".format(ref_file_name_output, sample_percentage))
+    save_path_labelled = os.path.join(output_path, "{}_labelled_{}.h5ad".format(ref_file_name_output, 10 * sample_percentage))
+    save_path_unlabelled = os.path.join(output_path, "{}_unlabelled_{}.h5ad".format(ref_file_name_output, 10 *  sample_percentage))
     
     adata_labelled.write_h5ad(save_path_labelled)
     adata_unlabelled.write_h5ad(save_path_unlabelled)

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from data import SingleCellData
 from loss import ArcFaceLoss
 from utils import train, create_model, saver
-
+from tensorboardX import SummaryWriter
 
 
 if __name__ == '__main__':
@@ -20,8 +20,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=10)
     parser.add_argument('--dataset_train', type=str, required=True)
     parser.add_argument('--dataset_test', type=str, required=True)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_gene_selected', type=int, default=3000)
+    parser.add_argument('--paired_data', default=False)
 
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--sgd_momentum', type=float, default=0.9)
@@ -40,19 +41,26 @@ if __name__ == '__main__':
         random.seed(args.seed)
     device = torch.device('cuda')
 
+    if not args.paired_data:
+        data_name = "_".join(os.path.split(args.dataset_train)[-1].split("_")[0:-1])
+    else:
+        data_name = "_".join(os.path.split(args.dataset_train)[-1].split("_")[0:-1] +
+                             os.path.split(args.dataset_test)[-1].split("_")[0:-1])
+
     sc_dataset_train = SingleCellData(data_path=args.dataset_train, num_gene=args.num_gene_selected)
 
     sc_dataset_test = SingleCellData(data_path=args.dataset_test,\
                                      num_gene=args.num_gene_selected,\
                                      shared_gene_mask=sc_dataset_train.gene_mask,\
                                      filter_mask = sc_dataset_train.filter_mask)
+    
     assert(np.array_equal(sc_dataset_train.gene_mask, sc_dataset_test.gene_mask))
     assert(np.array_equal(sc_dataset_train.filter_mask, sc_dataset_test.filter_mask))
 
-    sc_dataloader_train = DataLoader(sc_dataset_train, batch_size=args.batch_size)
-    sc_dataloader_test = DataLoader(sc_dataset_test, batch_size=args.batch_size)
+    sc_dataloader_train = DataLoader(sc_dataset_train, batch_size=args.batch_size, shuffle=True)
+    sc_dataloader_test = DataLoader(sc_dataset_test, batch_size=args.batch_size, shuffle=True)
     dataloader_dict = {'train':sc_dataloader_train, 'test':sc_dataloader_test}
-
+    assert(len(sc_dataloader_test.dataset) != len(sc_dataloader_train.dataset))
     parameters = []
     model = create_model(num_input=args.num_gene_selected,\
                          num_hidden_units=args.layers,\
@@ -74,11 +82,16 @@ if __name__ == '__main__':
         model_name = 'MLP_{}'.format("-".join(args.layers))
     
     optimizer = torch.optim.SGD(parameters, lr=args.learning_rate, momentum=args.sgd_momentum)
+    results_path = os.path.join(args.save_path, data_name)
 
     if not os.path.exists(args.save_path):
         os.mkdir(args.save_path)
-    saver = saver(save_path=args.save_path,\
+
+    embedding_writer = SummaryWriter(results_path)
+
+    saver = saver(save_path=results_path,\
                   model_name=model_name,\
+                  writer=embedding_writer,\
                   args=args)
     results = train(dataloaders=dataloader_dict,\
                     model=model,\
