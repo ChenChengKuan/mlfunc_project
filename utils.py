@@ -1,10 +1,86 @@
 import time
 import os
+import anndata
 import torch
 import torch.nn as nn
 import numpy as np
+import scanpy as sc
+import scipy.sparse as sp
 import copy
 import json
+
+
+def select_gene(data,\
+                num_gene,\
+                threshold=0,\
+                atleast=10,\
+                decay=1,
+                xoffset=5,\
+                yoffset=0.02):
+        
+        if sp.issparse(data):
+            zeroRate = 1 - np.squeeze(np.array((data > threshold).mean(axis=0)))
+            A = data.multiply(data > threshold)
+            A.data = np.log2(A.data)
+            meanExpr = np.zeros_like(zeroRate) * np.nan
+            detected = zeroRate < 1
+            meanExpr[detected] = np.squeeze(np.array(A[:, detected].mean(axis=0))) / (
+                1 - zeroRate[detected]
+            )
+        else:
+            zeroRate = 1 - np.mean(data > threshold, axis=0)
+            meanExpr = np.zeros_like(zeroRate) * np.nan
+            detected = zeroRate < 1
+            meanExpr[detected] = np.nanmean(
+                np.where(data[:, detected] > threshold, np.log2(data[:, detected]), np.nan),
+                axis=0,
+            )
+
+        lowDetection = np.array(np.sum(data > threshold, axis=0)).squeeze() < atleast
+        # lowDetection = (1 - zeroRate) * data.shape[0] < atleast - .00001
+        zeroRate[lowDetection] = np.nan
+        meanExpr[lowDetection] = np.nan
+
+        if num_gene is not None:
+            up = 10
+            low = 0
+            for t in range(100):
+                nonan = ~np.isnan(zeroRate)
+                selected = np.zeros_like(zeroRate).astype(bool)
+                selected[nonan] = (
+                    zeroRate[nonan] > np.exp(-decay * (meanExpr[nonan] - xoffset)) + yoffset
+                )
+                if np.sum(selected) == num_gene:
+                    break
+                elif np.sum(selected) < num_gene:
+                    up = xoffset
+                    xoffset = (xoffset + low) / 2
+                else:
+                    low = xoffset
+                    xoffset = (xoffset + up) / 2
+            print("Chosen offset: {:.2f}".format(xoffset))
+        else:
+            nonan = ~np.isnan(zeroRate)
+            selected = np.zeros_like(zeroRate).astype(bool)
+            selected[nonan] = (
+                zeroRate[nonan] > np.exp(-decay * (meanExpr[nonan] - xoffset)) + yoffset
+            )
+
+        return selected
+
+def extract_shared_gene(data_ref, data_trg, num_gene):
+    data_ref = anndata.read_h5ad(data_ref)
+    data_trg = anndata.read_h5ad(data_trg)
+    sc.pp.filter_genes(data_ref, min_counts=1)
+    shared_genes = data_ref.var_names[data_ref.var_names.isin(data_trg.var_names)]
+
+    data_ref = data_ref[:, data_ref.var_names.isin(shared_genes)]
+    data_trg = data_trg[:, data_trg.var_names.isin(shared_genes)]
+    data_ref = data_ref[:, data_ref.var_names.argsort()].copy()
+    data_trg = data_trg[:, data_trg.var_names.argsort()].copy()
+    assert all(data_ref.var_names == data_trg.var_names)
+    gene_mask = select_gene(data_ref.X, num_gene=num_gene, threshold=0)
+    return data_ref, data_trg, gene_mask
 
 class saver():
     def __init__(self, save_path, model_name, writer, args):

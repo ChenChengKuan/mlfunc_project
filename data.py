@@ -5,6 +5,58 @@ import scanpy as sc
 import torch
 from torch.utils.data.dataset import Dataset
 
+class PairedSingleCellData(Dataset):
+    def __init__(self, adata, gene_mask=None, cell_map=None, normalized=True):
+        self.gene_mask = gene_mask
+        self.normalized = normalized
+        self.anndata = adata
+        self.num_class = len(self.anndata.obs['labels'].unique().tolist())
+        
+        if self.normalized:
+            anndata_norm = self.anndata.copy()
+            sc.pp.normalize_per_cell(anndata_norm, counts_per_cell_after=1_000_000)
+            sc.pp.log1p(anndata_norm)
+            anndata_norm.X = anndata_norm.X.toarray()
+            anndata_norm.X -= anndata_norm.X.mean(axis=0)
+            anndata_norm.X /= anndata_norm.X.std(axis=0)
+            if np.isnan(anndata_norm.X).any():
+                print("Detect nan, fix by nan to num")
+                anndata_norm.X = np.nan_to_num(anndata_norm.X)
+                assert(not np.isnan(anndata_norm.X).any())
+
+            self.anndata_preprocessed = anndata_norm[:, self.gene_mask].copy()
+        else:
+            self.anndata_preprocessed = self.anndata[:, self.gene_mask].copy()      
+        self.X = torch.tensor(self.anndata_preprocessed.X)
+        self.id_to_batch, self.batch_to_id = self.get_batch_map()
+        
+        if cell_map is None:
+            self.id_to_cell, self.cell_to_id = self.get_cell_map()
+        else:
+            self.id_to_cell = cell_map['id2cell']
+            self.cell_to_id = cell_map['cell2id']
+        
+        
+        self.cell_label_tensor = torch.tensor([self.cell_to_id[e] for e in self.anndata.obs['labels']])
+        self.batch_id_tensor = torch.tensor([self.batch_to_id[e] for e in self.anndata.obs['batch_id']])
+        
+    def __getitem__(self, index):
+        return self.X[index], self.cell_label_tensor[index], self.batch_id_tensor[index]
+            
+    def __len__(self):
+        return len(self.anndata)
+    
+    def get_batch_map(self):
+        num_batch_type = len(self.anndata.obs['batch_id'].unique().tolist())
+        id2batch = dict(zip(list(range(num_batch_type)), self.anndata.obs['batch_id'].unique().tolist()))
+        batch2id = {v: k for k,v in id2batch.items()}
+        return id2batch, batch2id
+    
+    def get_cell_map(self):
+        num_cell_type = len(self.anndata.obs['labels'].unique().tolist())
+        id2cell = dict(zip(list(range(num_cell_type)), self.anndata.obs['labels'].unique().tolist()))
+        cell2id = {v:k for k,v in id2cell.items()}
+        return id2cell, cell2id
 
 class SingleCellData(Dataset):
     def __init__(self, data_path, num_gene, shared_gene_mask=None, filter_mask=None, normalized=True):
