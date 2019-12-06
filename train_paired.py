@@ -22,9 +22,9 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_train', type=str, required=True)
     parser.add_argument('--dataset_test', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_gene_selected', type=int, default=1000)
+    parser.add_argument('--num_gene_selected', type=int, default=3000)
     parser.add_argument('--save_cell_map', default=False, action='store_true')
-
+    
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--sgd_momentum', type=float, default=0.9)
     
@@ -97,6 +97,7 @@ if __name__ == '__main__':
     results = train(dataloaders=dataloader_dict,\
                     model=model,\
                     model_metric=model_metric,\
+                    paired=True,
                     criterion=criterion,\
                     optimizer=optimizer,\
                     device=device,\

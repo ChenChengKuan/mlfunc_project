@@ -100,6 +100,7 @@ if __name__ == '__main__':
     results = train(dataloaders=dataloader_dict,\
                     model=model,\
                     model_metric=model_metric,\
+                    paired=False,\
                     criterion=criterion,\
                     optimizer=optimizer,\
                     device=device,\

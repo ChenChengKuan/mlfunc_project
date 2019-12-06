@@ -136,7 +136,7 @@ class saver():
         self.writer.add_embedding(embedding, metadata=meta_list)
         self.writer.close()
 
-def train(dataloaders, model, model_metric, criterion, optimizer, device, saver, num_epoch):
+def train(dataloaders, model, model_metric, paired, criterion, optimizer, device, saver, num_epoch):
     since = time.time()
     logs = []
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -199,7 +199,8 @@ def train(dataloaders, model, model_metric, criterion, optimizer, device, saver,
         time_elapsed // 60, time_elapsed % 60))
     print('Best val Acc: {:4f}'.format(best_acc))
     saver.save_log(logs, best_log)
-    saver.save_embedding(model, outputs.shape[-1], dataloaders, device)
+    if not paired:
+        saver.save_embedding(model, outputs.shape[-1], dataloaders, device)
     return
 
 
