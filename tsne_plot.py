@@ -38,6 +38,6 @@ for embed, meta in zip(embed_res, embed_meta_res):
     plt.figure(figsize=(16,10))
     sns.scatterplot(x='tsne_one', y='tsne_two',\
                    data=embed_df, hue='cell_type',\
-                   palette=sns.color_palette("hls", 9))
+                   palette=sns.color_palette("hls", len(id2cell.keys())))
     plt.savefig(embed.replace('embed.pt', 'tsne_embed'))
 
