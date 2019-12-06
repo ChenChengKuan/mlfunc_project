@@ -27,7 +27,7 @@ class PairedSingleCellData(Dataset):
             self.anndata_preprocessed = anndata_norm[:, self.gene_mask].copy()
         else:
             self.anndata_preprocessed = self.anndata[:, self.gene_mask].copy()      
-        self.X = torch.tensor(self.anndata_preprocessed.X)
+        
         self.id_to_batch, self.batch_to_id = self.get_batch_map()
         
         if cell_map is None:
@@ -35,16 +35,29 @@ class PairedSingleCellData(Dataset):
         else:
             self.id_to_cell = cell_map['id2cell']
             self.cell_to_id = cell_map['cell2id']
-        
-        
-        self.cell_label_tensor = torch.tensor([self.cell_to_id[e] for e in self.anndata.obs['labels']])
-        self.batch_id_tensor = torch.tensor([self.batch_to_id[e] for e in self.anndata.obs['batch_id']])
+
+        X_valid = []
+        cell_label_list_valid = []
+        batch_list_valid = []
+        self.X = torch.tensor(self.anndata_preprocessed.X)
+        for idx in range(len(self.anndata.obs['labels'])):
+            if self.anndata.obs['labels'][idx] not in self.cell_to_id.keys():
+                continue
+            else:
+                X_valid.append(self.anndata_preprocessed.X[idx])
+                cell_label_list_valid.append(self.cell_to_id[self.anndata.obs['labels'][idx]])
+                batch_list_valid.append(self.batch_to_id[self.anndata.obs['batch_id'][idx]])
+
+
+        self.cell_label_tensor = torch.tensor(cell_label_list_valid)
+        self.batch_id_tensor = torch.tensor(batch_list_valid)
+        self.X = torch.tensor(X_valid)
         
     def __getitem__(self, index):
         return self.X[index], self.cell_label_tensor[index], self.batch_id_tensor[index]
             
     def __len__(self):
-        return len(self.anndata)
+        return len(self.X)
     
     def get_batch_map(self):
         num_batch_type = len(self.anndata.obs['batch_id'].unique().tolist())
