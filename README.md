@@ -2,7 +2,7 @@
 final project of W4995 Machine Learning for functional genomics
 
 # Basic usage
-Following show the basic usage to reproduce all experimental results. More detail usage will coming soon
+Following show the basic usage to reproduce all experimental results. More detail usage will come soon
 
 First, download the data and put them into a `./data/` folder 
 ```
