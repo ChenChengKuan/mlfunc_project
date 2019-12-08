@@ -104,7 +104,7 @@ class saver():
         output = {'args': self.args.__dict__, \
                   'log': log,\
                   'best':best_log}
-        output_path = os.path.join(self.save_path, self.model_name, 'log.txt')
+        output_path = os.path.join(self.save_path, self.model_name, 'log.json')
         with open(output_path, 'w') as handle:
             json.dump(output, handle)
         print("Saved training log and experiment config")
