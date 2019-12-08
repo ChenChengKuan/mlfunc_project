@@ -32,3 +32,4 @@ To plot the testing accuracy figures, use `acc_plot.py`. Following is an example
 ```
 python acc_plot.py --res ./results/baron_2016h_labelled_15/ --save_path ./
 ```
+The overall time to run all stuff shoule be less than 2 hours on a single Titan X GPU machine
